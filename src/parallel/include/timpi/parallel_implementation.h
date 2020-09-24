@@ -1931,52 +1931,6 @@ inline void Communicator::broadcast(std::unordered_map<K,V,H,E,A> & data,
 }
 
 
-
-template <typename Context, typename OutputContext,
-          typename Iter, typename OutputIter>
-inline void Communicator::broadcast_packed_range(const Context * context1,
-                                                 Iter range_begin,
-                                                 const Iter range_end,
-                                                 OutputContext * context2,
-                                                 OutputIter out_iter,
-                                                 const unsigned int root_id,
-                                                 std::size_t approx_buffer_size) const
-{
-  typedef typename std::iterator_traits<Iter>::value_type T;
-  typedef typename Packing<T>::buffer_type buffer_t;
-
-  do
-    {
-      // We will serialize variable size objects from *range_begin to
-      // *range_end as a sequence of ints in this buffer
-      std::vector<buffer_t> buffer;
-
-      if (this->rank() == root_id)
-        range_begin = pack_range
-          (context1, range_begin, range_end, buffer, approx_buffer_size);
-
-      // this->broadcast(vector) requires the receiving vectors to
-      // already be the appropriate size
-      std::size_t buffer_size = buffer.size();
-      this->broadcast (buffer_size, root_id);
-
-      // We continue until there's nothing left to broadcast
-      if (!buffer_size)
-        break;
-
-      buffer.resize(buffer_size);
-
-      // Broadcast the packed data
-      this->broadcast (buffer, root_id);
-
-      if (this->rank() != root_id)
-        unpack_range
-          (buffer, context2, out_iter, (T*)nullptr);
-    } while (true);  // break above when we reach buffer_size==0
-}
-
-
-
 template <typename Context, typename OutputIter, typename T>
 inline void Communicator::nonblocking_receive_packed_range (const unsigned int src_processor_id,
                                                             Context * context,
@@ -3427,6 +3381,55 @@ inline void Communicator::broadcast (T & timpi_mpi_var(data),
                 this->get()));
 }
 
+template <typename Context, typename OutputContext,
+          typename Iter, typename OutputIter>
+inline void Communicator::broadcast_packed_range(const Context * context1,
+                                                 Iter range_begin,
+                                                 const Iter range_end,
+                                                 OutputContext * context2,
+                                                 OutputIter out_iter,
+                                                 const unsigned int root_id,
+                                                 std::size_t approx_buffer_size) const
+{
+  typedef typename std::iterator_traits<Iter>::value_type T;
+  typedef typename Packing<T>::buffer_type buffer_t;
+
+  if (this->size() == 1)
+  {
+    timpi_assert (!this->rank());
+    timpi_assert (!root_id);
+    return;
+  }
+
+  do
+  {
+    // We will serialize variable size objects from *range_begin to
+    // *range_end as a sequence of ints in this buffer
+    std::vector<buffer_t> buffer;
+
+    if (this->rank() == root_id)
+      range_begin = pack_range
+        (context1, range_begin, range_end, buffer, approx_buffer_size);
+
+    // this->broadcast(vector) requires the receiving vectors to
+    // already be the appropriate size
+    std::size_t buffer_size = buffer.size();
+    this->broadcast (buffer_size, root_id);
+
+    // We continue until there's nothing left to broadcast
+    if (!buffer_size)
+      break;
+
+    buffer.resize(buffer_size);
+
+    // Broadcast the packed data
+    this->broadcast (buffer, root_id);
+
+    if (this->rank() != root_id)
+      unpack_range
+        (buffer, context2, out_iter, (T*)nullptr);
+  } while (true);  // break above when we reach buffer_size==0
+}
 
 
 template <typename Context, typename Iter, typename OutputIter>
