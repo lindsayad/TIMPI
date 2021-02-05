@@ -284,6 +284,8 @@ Packing<std::pair<T1, T2>,
   return pr;
 }
 
+#define TIMPI_HAVE_STRING_PACKING
+
 template <typename T>
 class Packing<std::basic_string<T>> {
 public:
@@ -343,8 +345,7 @@ public:
 
     in += size_bytes + string_len;
 
-    //  std::cout << oss.str() << std::endl;
-    return std::string(oss.str());
+    return oss.str();
   }
 
 };
